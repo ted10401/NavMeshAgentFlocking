@@ -4,6 +4,9 @@ using UnityEngine.AI;
 public class BoidController : MonoBehaviour
 {
     [SerializeField] private NavMeshAgent[] m_boids;
+    [SerializeField] private float m_controllerAlignmentWeight = 1f;
+    [SerializeField] private float m_controllerCohesionWeight = 1f;
+    [SerializeField] private float m_controllerSeparationWeight = 1f;
     [SerializeField] private float m_alignmentWeight = 1f;
     [SerializeField] private float m_cohesionWeight = 1f;
     [SerializeField] private float m_separationWeight = 1f;
@@ -21,77 +24,46 @@ public class BoidController : MonoBehaviour
     {
         for (int i = 0; i < m_boids.Length; i++)
         {
-            m_boids[i].velocity = GetAlignment(m_boids[i]) * m_alignmentWeight + GetCohesion(m_boids[i]) * m_cohesionWeight + GetSeparation(m_boids[i]) * m_separationWeight;
+            m_boids[i].SetDestination(m_boids[i].transform.position + GetVelocity(m_boids[i]));
         }
     }
 
-    private Vector3 GetAlignment(NavMeshAgent navMeshAgent)
+    private Vector3 GetVelocity(NavMeshAgent navMeshAgent)
     {
         Vector3 alignment = Vector3.zero;
-
-        int count = 0;
-        for (int i = 0; i < m_boids.Length; i++)
-        {
-            if(m_boids[i] == navMeshAgent)
-            {
-                continue;
-            }
-
-            count++;
-            alignment += m_boids[i].transform.forward;
-        }
-
-        alignment += m_navMeshAgent.transform.forward;
-        count++;
-
-        alignment /= count;
-
-        return alignment;
-    }
-
-    private Vector3 GetCohesion(NavMeshAgent navMeshAgent)
-    {
-        Vector3 boidCenter = Vector3.zero;
-        int count = 0;
-
-        for (int i = 0; i < m_boids.Length; i++)
-        {
-            if(m_boids[i] == navMeshAgent)
-            {
-                continue;
-            }
-
-            count++;
-            boidCenter += m_boids[i].transform.position;
-        }
-
-        count++;
-        boidCenter += m_transform.position;
-
-        boidCenter /= count;
-
-        return boidCenter - navMeshAgent.transform.position;
-    }
-
-    private Vector3 GetSeparation(NavMeshAgent navMeshAgent)
-    {
+        Vector3 cohesion = Vector3.zero;
         Vector3 separation = Vector3.zero;
-        int count = 0;
 
-        for (int i = 0; i < m_boids.Length; i++)
+        for(int i = 0; i < m_boids.Length; i++)
         {
-            if (m_boids[i] == navMeshAgent)
+            if(m_boids[i] == navMeshAgent)
             {
                 continue;
             }
 
-            count++;
-            separation += m_boids[i].transform.position - navMeshAgent.transform.position;
+            alignment += m_boids[i].desiredVelocity;
+            cohesion += m_boids[i].transform.position;
+            separation += (navMeshAgent.transform.position - m_boids[i].transform.position) / (navMeshAgent.transform.position - m_boids[i].transform.position).magnitude;
         }
 
-        separation /= count;
-        separation *= -1;
+        alignment = alignment / (m_boids.Length - 1);
+        alignment += m_navMeshAgent.desiredVelocity * m_controllerAlignmentWeight;
+        alignment /= 2;
+        alignment = Vector3.ClampMagnitude(alignment, navMeshAgent.speed);
 
-        return separation;
+        cohesion = cohesion / (m_boids.Length - 1);
+        cohesion = (m_transform.position - m_navMeshAgent.velocity) * m_controllerCohesionWeight;
+        cohesion = cohesion - navMeshAgent.transform.position;
+        cohesion = Vector3.ClampMagnitude(cohesion, navMeshAgent.speed);
+
+        separation += (navMeshAgent.transform.position - m_transform.position) * m_controllerSeparationWeight / (navMeshAgent.transform.position - m_transform.position).magnitude;
+        separation = separation / m_boids.Length;
+        separation = Vector3.ClampMagnitude(separation, navMeshAgent.speed);
+
+        Vector3 velocity = Vector3.zero;
+        velocity += alignment * m_alignmentWeight + cohesion * m_cohesionWeight + separation * m_separationWeight;
+        velocity = Vector3.ClampMagnitude(velocity, navMeshAgent.speed);
+
+        return velocity;
     }
 }
